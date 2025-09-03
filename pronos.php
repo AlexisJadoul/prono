@@ -150,7 +150,7 @@ if ($matches) {
             <input type="number" name="pa[<?=$mid?>]" min="0" style="width:42px" value="<?=($pa!==null?$pa:'')?>" <?= $locked?'disabled':'' ?>>
           </td>
 
-          <td>
+          <td class="pick">
             <?php
               $dH = $locked?'disabled':'';
               $isScore = ($ph !== null && $pa !== null);
@@ -158,7 +158,6 @@ if ($matches) {
             <label><input type="radio" name="pick[<?=$mid?>]" value="H" <?= $pk==='H' && !$isScore?'checked':'' ?> <?=$dH?>> 1</label>
             <label><input type="radio" name="pick[<?=$mid?>]" value="D" <?= $pk==='D' && !$isScore?'checked':'' ?> <?=$dH?>> N</label>
             <label><input type="radio" name="pick[<?=$mid?>]" value="A" <?= $pk==='A' && !$isScore?'checked':'' ?> <?=$dH?>> 2</label>
-            <label><input type="radio" name="pick[<?=$mid?>]" value=""  <?= ($pk===null || $isScore)?'checked':'' ?> <?=$dH?>> -</label>
           </td>
 
           <td>
