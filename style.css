@@ -47,6 +47,19 @@ input {
   background: #0e1116;
   color: #eaecef;
 }
+
+/* Radio buttons for pronos */
+td.pick label {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 8px 0 0;
+}
+
+td.pick input[type=radio] {
+  width: auto;
+  padding: 0;
+  margin-right: 4px;
+}
 button {
   margin-top: 12px;
   padding: 8px 12px;
