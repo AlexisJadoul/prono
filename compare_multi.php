@@ -122,6 +122,7 @@ echo "  <a class='badge' href='compare_multi.php?".$qsAll."'>Tous les pronos</a>
 echo "</div>";
 
 echo "<div style='display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start'>";
+
 echo "<div class='card' style='flex:1; min-width:280px'>";
 echo "<h3>Classement r\xE9el</h3>";
 echo "<table>";
@@ -133,12 +134,15 @@ foreach($realTbl as $row){
 }
 echo "</table>";
 echo "</div>";
+
 foreach($validNames as $u){
   $tbl=$predTbls[$u];
   echo "<div class='card' style='flex:1; min-width:280px'>";
   echo "<h3>".h($u)."</h3>";
   echo "<table>";
+
   echo "<tr><th>#</th><th>Equipe</th><th>Pts</th><th>Rang reel</th><th>Δ rang</th></tr>";
+
   $pr=1;
   foreach($tbl as $row){
     $team=$row['team'];
@@ -147,7 +151,9 @@ foreach($validNames as $u){
     $drTxt=$dr===null?'—':($dr>0?'+'.$dr:$dr);
     $style='';
     if($dr!==null){ if($dr<0) $style=" style='background:#0b2a1b'"; elseif($dr>0) $style=" style='background:#2a0b0b'"; }
+
     echo "<tr$style><td>".$pr."</td><td>".h($team)."</td><td>".$row['Pts']."</td><td>".($rr?:'—')."</td><td>".$drTxt."</td></tr>";
+
     $pr++;
   }
   echo "</table>";
