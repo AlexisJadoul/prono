@@ -6,6 +6,9 @@ function _init_team(&$a,$n){ if(!isset($a[$n])) $a[$n]=['team'=>$n,'PJ'=>0,'G'=>
 function _sort_tbl($t){ usort($t,function($x,$y){ foreach(['Pts','Diff','BP','AG','AW'] as $k){ if($x[$k]!==$y[$k]) return $y[$k]<=>$x[$k]; } return strcasecmp($x['team'],$y['team']); }); return $t; }
 function _map_rank($t){ $r=1;$m=[]; foreach($t as $x){ $m[$x['team']]=['rank'=>$r++,'pts'=>$x['Pts'],'diff'=>$x['Diff']]; } return $m; }
 
+$mode = $_GET['mode'] ?? 'to_date';
+if(!in_array($mode, ['to_date','all'], true)) $mode = 'to_date';
+
 $cutRaw = trim($_GET['cut'] ?? 'now');
 $cut = ($cutRaw===''||strtolower($cutRaw)==='now') ? date('Y-m-d H:i:s') : date('Y-m-d H:i:s', strtotime($cutRaw));
 
@@ -20,6 +23,8 @@ echo "<div class='card'>";
 echo "  <h2>Comparer des joueurs</h2>";
 echo "  <form method='get'>";
 echo "    <p class='muted'>Choisissez jusqu'à 5 joueurs (Ctrl/Cmd pour sélectionner plusieurs)</p>";
+echo "    <input type='hidden' name='mode' value='".h($mode)."'>";
+if($mode==='to_date') echo "    <input type='hidden' name='cut' value='".h($cutRaw)."'>";
 echo "    <select name='u[]' multiple size='10'>";
 foreach($allUsers as $u){
   $sel = in_array($u, $names, true) ? " selected" : "";
@@ -36,6 +41,7 @@ if(!$names){
 }
 
 $predMaps = [];
+$predTbls = [];
 $validNames = [];
 foreach($names as $uname){
   $st=$pdo->prepare("SELECT id,username FROM users WHERE username=?");
@@ -46,8 +52,13 @@ foreach($names as $uname){
     continue;
   }
   $uid=(int)$user['id'];
-  $q=$pdo->prepare("SELECT m.home_team,m.away_team,p.pred_home,p.pred_away,p.pick FROM matches m JOIN predictions p ON p.match_id=m.id WHERE p.user_id=? AND m.md IS NOT NULL AND m.is_finished=1 AND m.kickoff<=?");
-  $q->execute([$uid,$cut]);
+  if($mode==='all'){
+    $q=$pdo->prepare("SELECT m.home_team,m.away_team,p.pred_home,p.pred_away,p.pick FROM matches m JOIN predictions p ON p.match_id=m.id WHERE p.user_id=? AND m.md IS NOT NULL");
+    $q->execute([$uid]);
+  }else{
+    $q=$pdo->prepare("SELECT m.home_team,m.away_team,p.pred_home,p.pred_away,p.pick FROM matches m JOIN predictions p ON p.match_id=m.id WHERE p.user_id=? AND m.md IS NOT NULL AND m.is_finished=1 AND m.kickoff<=?");
+    $q->execute([$uid,$cut]);
+  }
   $pred=[];
   while($r=$q->fetch(PDO::FETCH_ASSOC)){
     $h=$r['home_team']; $a=$r['away_team'];
@@ -64,6 +75,7 @@ foreach($names as $uname){
   }
   $predTbl=_sort_tbl(array_values($pred));
   $predMaps[$user['username']] = _map_rank($predTbl);
+  $predTbls[$user['username']] = $predTbl;
   $validNames[] = $user['username'];
 }
 
@@ -72,8 +84,13 @@ if(!$predMaps){
   exit;
 }
 
-$st2=$pdo->prepare("SELECT home_team,away_team,home_score,away_score FROM matches WHERE md IS NOT NULL AND is_finished=1 AND kickoff<=?");
-$st2->execute([$cut]);
+if($mode==='all'){
+  $st2=$pdo->prepare("SELECT home_team,away_team,home_score,away_score FROM matches WHERE md IS NOT NULL AND is_finished=1");
+  $st2->execute();
+}else{
+  $st2=$pdo->prepare("SELECT home_team,away_team,home_score,away_score FROM matches WHERE md IS NOT NULL AND is_finished=1 AND kickoff<=?");
+  $st2->execute([$cut]);
+}
 $real=[];
 while($m=$st2->fetch(PDO::FETCH_ASSOC)){
   $h=$m['home_team']; $a=$m['away_team']; $hs=$m['home_score']; $as=$m['away_score'];
@@ -90,36 +107,52 @@ while($m=$st2->fetch(PDO::FETCH_ASSOC)){
 $realTbl=_sort_tbl(array_values($real));
 $realMap=_map_rank($realTbl);
 
-$teams = array_keys($realMap);
-foreach($predMaps as $map){ $teams = array_merge($teams, array_keys($map)); }
-$teams = array_values(array_unique($teams));
-usort($teams,function($a,$b) use ($realMap){ $ar=$realMap[$a]['rank']??999; $br=$realMap[$b]['rank']??999; if($ar!==$br) return $ar<=>$br; return strcasecmp($a,$b); });
-
 echo "<div class='card'>";
-echo "  <h2>Comparaison a date</h2>";
-echo "  <p class='muted'>Date de coupe: <strong>".h($cut)."</strong>. Δ rang = reel - predit.</p>";
+if($mode==='all'){
+  echo "  <h2>Comparaison tous les pronos</h2>";
+  echo "  <p class='muted'>Basé sur tous les matches disponibles. Δ rang = reel - predit.</p>";
+}else{
+  echo "  <h2>Comparaison a date</h2>";
+  echo "  <p class='muted'>Date de coupe: <strong>".h($cut)."</strong>. Δ rang = reel - predit.</p>";
+}
+$qsToDate = http_build_query(['u'=>$names,'mode'=>'to_date','cut'=>$cutRaw]);
+$qsAll = http_build_query(['u'=>$names,'mode'=>'all']);
+echo "  <p style='margin-top:6px'><a class='badge' href='compare_multi.php?".$qsToDate."'>A date</a> ";
+echo "  <a class='badge' href='compare_multi.php?".$qsAll."'>Tous les pronos</a></p>";
 echo "</div>";
 
-echo "<div class='card'>";
+echo "<div style='display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start'>";
+echo "<div class='card' style='flex:1; min-width:280px'>";
+echo "<h3>Classement r\xE9el</h3>";
 echo "<table>";
-echo "  <tr><th>Equipe</th><th>Rang reel</th>";
-foreach($validNames as $u){ echo "<th>".h($u)."</th>"; }
-echo "</tr>";
-foreach($teams as $t){
-  $rr=$realMap[$t]['rank']??null;
-  echo "  <tr><td>".h($t)."</td><td>".($rr?:'—')."</td>";
-  foreach($validNames as $u){
-    $pr=$predMaps[$u][$t]['rank']??null;
-    $dr=($pr!==null && $rr!==null)?($rr-$pr):null;
+echo "<tr><th>#</th><th>Equipe</th><th>Pts</th></tr>";
+$rrank=1;
+foreach($realTbl as $row){
+  echo "<tr><td>".$rrank."</td><td>".h($row['team'])."</td><td>".$row['Pts']."</td></tr>";
+  $rrank++;
+}
+echo "</table>";
+echo "</div>";
+foreach($validNames as $u){
+  $tbl=$predTbls[$u];
+  echo "<div class='card' style='flex:1; min-width:280px'>";
+  echo "<h3>".h($u)."</h3>";
+  echo "<table>";
+  echo "<tr><th>#</th><th>Equipe</th><th>Pts</th><th>Rang reel</th><th>Δ rang</th></tr>";
+  $pr=1;
+  foreach($tbl as $row){
+    $team=$row['team'];
+    $rr=$realMap[$team]['rank']??null;
+    $dr=($rr!==null)?($rr-$pr):null;
     $drTxt=$dr===null?'—':($dr>0?'+'.$dr:$dr);
     $style='';
     if($dr!==null){ if($dr<0) $style=" style='background:#0b2a1b'"; elseif($dr>0) $style=" style='background:#2a0b0b'"; }
-    $cell=$pr===null?'—':$pr."<br><span class='muted'>".$drTxt."</span>";
-    echo "<td$style>".$cell."</td>";
+    echo "<tr$style><td>".$pr."</td><td>".h($team)."</td><td>".$row['Pts']."</td><td>".($rr?:'—')."</td><td>".$drTxt."</td></tr>";
+    $pr++;
   }
-  echo "</tr>";
+  echo "</table>";
+  echo "</div>";
 }
-echo "</table>";
 echo "</div>";
 
 require_once __DIR__.'/footer.php';
