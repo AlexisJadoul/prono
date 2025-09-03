@@ -6,6 +6,9 @@ function _init_team(&$a,$n){ if(!isset($a[$n])) $a[$n]=['team'=>$n,'PJ'=>0,'G'=>
 function _sort_tbl($t){ usort($t,function($x,$y){ foreach(['Pts','Diff','BP','AG','AW'] as $k){ if($x[$k]!==$y[$k]) return $y[$k]<=>$x[$k]; } return strcasecmp($x['team'],$y['team']); }); return $t; }
 function _map_rank($t){ $r=1;$m=[]; foreach($t as $x){ $m[$x['team']]=['rank'=>$r++,'pts'=>$x['Pts'],'diff'=>$x['Diff']]; } return $m; }
 
+$mode = $_GET['mode'] ?? 'to_date';
+if(!in_array($mode, ['to_date','all'], true)) $mode = 'to_date';
+
 $cutRaw = trim($_GET['cut'] ?? 'now');
 $cut = ($cutRaw===''||strtolower($cutRaw)==='now') ? date('Y-m-d H:i:s') : date('Y-m-d H:i:s', strtotime($cutRaw));
 
@@ -20,6 +23,8 @@ echo "<div class='card'>";
 echo "  <h2>Comparer des joueurs</h2>";
 echo "  <form method='get'>";
 echo "    <p class='muted'>Choisissez jusqu'à 5 joueurs (Ctrl/Cmd pour sélectionner plusieurs)</p>";
+echo "    <input type='hidden' name='mode' value='".h($mode)."'>";
+if($mode==='to_date') echo "    <input type='hidden' name='cut' value='".h($cutRaw)."'>";
 echo "    <select name='u[]' multiple size='10'>";
 foreach($allUsers as $u){
   $sel = in_array($u, $names, true) ? " selected" : "";
@@ -46,8 +51,13 @@ foreach($names as $uname){
     continue;
   }
   $uid=(int)$user['id'];
-  $q=$pdo->prepare("SELECT m.home_team,m.away_team,p.pred_home,p.pred_away,p.pick FROM matches m JOIN predictions p ON p.match_id=m.id WHERE p.user_id=? AND m.md IS NOT NULL AND m.is_finished=1 AND m.kickoff<=?");
-  $q->execute([$uid,$cut]);
+  if($mode==='all'){
+    $q=$pdo->prepare("SELECT m.home_team,m.away_team,p.pred_home,p.pred_away,p.pick FROM matches m JOIN predictions p ON p.match_id=m.id WHERE p.user_id=? AND m.md IS NOT NULL");
+    $q->execute([$uid]);
+  }else{
+    $q=$pdo->prepare("SELECT m.home_team,m.away_team,p.pred_home,p.pred_away,p.pick FROM matches m JOIN predictions p ON p.match_id=m.id WHERE p.user_id=? AND m.md IS NOT NULL AND m.is_finished=1 AND m.kickoff<=?");
+    $q->execute([$uid,$cut]);
+  }
   $pred=[];
   while($r=$q->fetch(PDO::FETCH_ASSOC)){
     $h=$r['home_team']; $a=$r['away_team'];
@@ -72,8 +82,13 @@ if(!$predMaps){
   exit;
 }
 
-$st2=$pdo->prepare("SELECT home_team,away_team,home_score,away_score FROM matches WHERE md IS NOT NULL AND is_finished=1 AND kickoff<=?");
-$st2->execute([$cut]);
+if($mode==='all'){
+  $st2=$pdo->prepare("SELECT home_team,away_team,home_score,away_score FROM matches WHERE md IS NOT NULL AND is_finished=1");
+  $st2->execute();
+}else{
+  $st2=$pdo->prepare("SELECT home_team,away_team,home_score,away_score FROM matches WHERE md IS NOT NULL AND is_finished=1 AND kickoff<=?");
+  $st2->execute([$cut]);
+}
 $real=[];
 while($m=$st2->fetch(PDO::FETCH_ASSOC)){
   $h=$m['home_team']; $a=$m['away_team']; $hs=$m['home_score']; $as=$m['away_score'];
@@ -96,8 +111,17 @@ $teams = array_values(array_unique($teams));
 usort($teams,function($a,$b) use ($realMap){ $ar=$realMap[$a]['rank']??999; $br=$realMap[$b]['rank']??999; if($ar!==$br) return $ar<=>$br; return strcasecmp($a,$b); });
 
 echo "<div class='card'>";
-echo "  <h2>Comparaison a date</h2>";
-echo "  <p class='muted'>Date de coupe: <strong>".h($cut)."</strong>. Δ rang = reel - predit.</p>";
+if($mode==='all'){
+  echo "  <h2>Comparaison tous les pronos</h2>";
+  echo "  <p class='muted'>Basé sur tous les matches disponibles. Δ rang = reel - predit.</p>";
+}else{
+  echo "  <h2>Comparaison a date</h2>";
+  echo "  <p class='muted'>Date de coupe: <strong>".h($cut)."</strong>. Δ rang = reel - predit.</p>";
+}
+$qsToDate = http_build_query(['u'=>$names,'mode'=>'to_date','cut'=>$cutRaw]);
+$qsAll = http_build_query(['u'=>$names,'mode'=>'all']);
+echo "  <p style='margin-top:6px'><a class='badge' href='compare_multi.php?".$qsToDate."'>A date</a> ";
+echo "  <a class='badge' href='compare_multi.php?".$qsAll."'>Tous les pronos</a></p>";
 echo "</div>";
 
 echo "<div class='card'>";
