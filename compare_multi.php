@@ -13,9 +13,25 @@ $uParam = $_GET['u'] ?? [];
 if(!is_array($uParam)) $uParam = explode(',', $uParam);
 $names = array_values(array_unique(array_filter(array_map('trim', $uParam), fn($x)=>$x!=='')));
 $names = array_slice($names, 0, 5);
+// liste des utilisateurs pour le formulaire de sélection
+$stAll = $pdo->query("SELECT username FROM users ORDER BY username");
+$allUsers = $stAll->fetchAll(PDO::FETCH_COLUMN);
+
+echo "<div class='card'>";
+echo "  <h2>Comparer des joueurs</h2>";
+echo "  <form method='get'>";
+echo "    <p class='muted'>Choisissez jusqu'à 5 joueurs (Ctrl/Cmd pour sélectionner plusieurs)</p>";
+echo "    <select name='u[]' multiple size='10'>";
+foreach($allUsers as $u){
+  $sel = in_array($u, $names, true) ? " selected" : "";
+  echo "      <option value=\"".h($u)."\"$sel>".h($u)."</option>";
+}
+echo "    </select><br>";
+echo "    <button type='submit'>Comparer</button>";
+echo "  </form>";
+echo "</div>";
 
 if(!$names){
-  echo "<div class='card'><h2>Comparaison classement</h2><p class='err'>Passer des utilisateurs via ?u=Pseudo1&u=Pseudo2 (max 5).</p></div>";
   require_once __DIR__.'/footer.php';
   exit;
 }
