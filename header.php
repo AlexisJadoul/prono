@@ -19,6 +19,7 @@ $me = current_user();
   <a href="index.php">Accueil</a>
   <a href="pronos.php">Mes pronos</a>
   <a href="compare_md.php">Comparer par journée</a>
+  <a href="compare_multi.php">Comparer joueurs</a>
 
   <?php if ($me): ?>
     <span class="muted">Connecté: <?=htmlspecialchars($me['username'])?></span>
