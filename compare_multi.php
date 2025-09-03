@@ -41,6 +41,7 @@ if(!$names){
 }
 
 $predMaps = [];
+$predTbls = [];
 $validNames = [];
 foreach($names as $uname){
   $st=$pdo->prepare("SELECT id,username FROM users WHERE username=?");
@@ -74,6 +75,7 @@ foreach($names as $uname){
   }
   $predTbl=_sort_tbl(array_values($pred));
   $predMaps[$user['username']] = _map_rank($predTbl);
+  $predTbls[$user['username']] = $predTbl;
   $validNames[] = $user['username'];
 }
 
@@ -105,11 +107,6 @@ while($m=$st2->fetch(PDO::FETCH_ASSOC)){
 $realTbl=_sort_tbl(array_values($real));
 $realMap=_map_rank($realTbl);
 
-$teams = array_keys($realMap);
-foreach($predMaps as $map){ $teams = array_merge($teams, array_keys($map)); }
-$teams = array_values(array_unique($teams));
-usort($teams,function($a,$b) use ($realMap){ $ar=$realMap[$a]['rank']??999; $br=$realMap[$b]['rank']??999; if($ar!==$br) return $ar<=>$br; return strcasecmp($a,$b); });
-
 echo "<div class='card'>";
 if($mode==='all'){
   echo "  <h2>Comparaison tous les pronos</h2>";
@@ -124,26 +121,27 @@ echo "  <p style='margin-top:6px'><a class='badge' href='compare_multi.php?".$qs
 echo "  <a class='badge' href='compare_multi.php?".$qsAll."'>Tous les pronos</a></p>";
 echo "</div>";
 
-echo "<div class='card'>";
-echo "<table>";
-echo "  <tr><th>Equipe</th><th>Rang reel</th>";
-foreach($validNames as $u){ echo "<th>".h($u)."</th>"; }
-echo "</tr>";
-foreach($teams as $t){
-  $rr=$realMap[$t]['rank']??null;
-  echo "  <tr><td>".h($t)."</td><td>".($rr?:'—')."</td>";
-  foreach($validNames as $u){
-    $pr=$predMaps[$u][$t]['rank']??null;
-    $dr=($pr!==null && $rr!==null)?($rr-$pr):null;
+echo "<div style='display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start'>";
+foreach($validNames as $u){
+  $tbl=$predTbls[$u];
+  echo "<div class='card' style='flex:1; min-width:280px'>";
+  echo "<h3>".h($u)."</h3>";
+  echo "<table>";
+  echo "<tr><th>#</th><th>Equipe</th><th>Rang reel</th><th>Δ rang</th></tr>";
+  $pr=1;
+  foreach($tbl as $row){
+    $team=$row['team'];
+    $rr=$realMap[$team]['rank']??null;
+    $dr=($rr!==null)?($rr-$pr):null;
     $drTxt=$dr===null?'—':($dr>0?'+'.$dr:$dr);
     $style='';
     if($dr!==null){ if($dr<0) $style=" style='background:#0b2a1b'"; elseif($dr>0) $style=" style='background:#2a0b0b'"; }
-    $cell=$pr===null?'—':$pr."<br><span class='muted'>".$drTxt."</span>";
-    echo "<td$style>".$cell."</td>";
+    echo "<tr$style><td>".$pr."</td><td>".h($team)."</td><td>".($rr?:'—')."</td><td>".$drTxt."</td></tr>";
+    $pr++;
   }
-  echo "</tr>";
+  echo "</table>";
+  echo "</div>";
 }
-echo "</table>";
 echo "</div>";
 
 require_once __DIR__.'/footer.php';
